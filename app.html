@@ -72,15 +72,20 @@
       <label>Name</label>
       <input id="itemTitle" placeholder="Deep work session" />
     </div>
-    <div class="row2">
-      <div class="field">
-        <label>Duration (minutes)</label>
-        <input type="number" id="itemDuration" value="30" min="5" step="5" />
-      </div>
-      <div class="field">
-        <label>Color</label>
+    <div class="field">
+      <label>Duration (minutes)</label>
+      <input type="number" id="itemDuration" value="30" min="5" step="5" />
+    </div>
+    <div class="field">
+      <label>Color</label>
+      <div class="color-row">
         <input type="color" id="itemColor" value="#465E95" />
+        <input type="text" id="itemColorHex" value="#465E95" maxlength="7" placeholder="#465E95" />
       </div>
+    </div>
+    <div class="field">
+      <label>Note</label>
+      <textarea id="itemNote" placeholder="Optional details…" rows="2"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" id="itemCancel">Cancel</button>

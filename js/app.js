@@ -263,7 +263,7 @@ function renderTray() {
     const chip = document.createElement("div");
     chip.className = "tray-chip";
     chip.dataset.itemId = item.id;
-    chip.style.borderLeft = `4px solid ${color}`;
+    chip.style.background = color;
     chip.innerHTML = `
       <span>${item.title}</span>
       <span class="chip-duration">${item.duration}m</span>
@@ -354,7 +354,7 @@ function renderItemBlock(item) {
   const block = document.createElement("div");
   block.className = "item-block" + (item.completed ? " completed" : "");
   block.dataset.itemId = item.id;
-  block.style.borderLeftColor = item.color || "#465E95";
+  block.style.background = item.color || "#465E95";
 
   const setPosition = (startMinutes, durationMin) => {
     const leftPct = ((startMinutes - STRIP_START_MIN) / STRIP_RANGE_MIN) * 100;
@@ -378,6 +378,7 @@ function renderItemBlock(item) {
       <button class="del" data-del-item="${item.id}" aria-label="Delete item">✕</button>
     </div>
     <span class="item-title">${item.title}</span>
+    ${item.note ? `<span class="item-note">${item.note}</span>` : ""}
   `;
   block.appendChild(timeEl);
 
@@ -466,14 +467,32 @@ const itemModalTitle = document.getElementById("itemModalTitle");
 const itemTitleInput = document.getElementById("itemTitle");
 const itemDurationInput = document.getElementById("itemDuration");
 const itemColorInput = document.getElementById("itemColor");
+const itemColorHexInput = document.getElementById("itemColorHex");
+const itemNoteInput = document.getElementById("itemNote");
 let editingItemId = null;
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+function setModalColor(hex) {
+  itemColorInput.value = hex;
+  itemColorHexInput.value = hex.toUpperCase();
+}
+
+itemColorInput.oninput = () => setModalColor(itemColorInput.value);
+itemColorHexInput.oninput = () => {
+  let val = itemColorHexInput.value.trim();
+  if (val && !val.startsWith("#")) val = `#${val}`;
+  itemColorHexInput.value = val;
+  if (HEX_COLOR_RE.test(val)) itemColorInput.value = val;
+};
 
 function openItemModal(item) {
   editingItemId = item ? item.id : null;
   itemModalTitle.textContent = item ? "Edit Item" : "New Item";
   itemTitleInput.value = item ? item.title : "";
   itemDurationInput.value = item ? item.duration : 30;
-  itemColorInput.value = item ? (item.color || "#465E95") : "#465E95";
+  setModalColor(item ? (item.color || "#465E95") : "#465E95");
+  itemNoteInput.value = item ? (item.note || "") : "";
   itemModal.classList.add("active");
 }
 
@@ -482,17 +501,19 @@ document.getElementById("itemCancel").onclick = () => itemModal.classList.remove
 document.getElementById("itemSave").onclick = async () => {
   const title = itemTitleInput.value.trim();
   const duration = Number(itemDurationInput.value) || 30;
-  const color = itemColorInput.value;
+  const color = HEX_COLOR_RE.test(itemColorHexInput.value) ? itemColorHexInput.value : itemColorInput.value;
+  const note = itemNoteInput.value.trim();
   if (!title) return;
 
   if (editingItemId) {
-    await updateDoc(doc(db, "scheduleItems", editingItemId), { title, duration, color });
+    await updateDoc(doc(db, "scheduleItems", editingItemId), { title, duration, color, note });
   } else {
     await addDoc(collection(db, "scheduleItems"), {
       uid: currentUser.uid,
       title,
       duration,
       color,
+      note,
       day: null,
       startMinutes: null,
       completed: false,
