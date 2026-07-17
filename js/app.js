@@ -83,9 +83,9 @@ onAuthStateChanged(auth, (user) => {
 /* =========================================================
    STATE + WEEK GRID CONFIG
    ========================================================= */
-const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const STRIP_START_MIN = 6 * 60;   // 06:00
-const STRIP_END_MIN = 23 * 60;    // 23:00
+const DAY_NAMES = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const STRIP_START_MIN = 0;        // 12:00 AM
+const STRIP_END_MIN = 24 * 60;    // 12:00 AM next day
 const STRIP_RANGE_MIN = STRIP_END_MIN - STRIP_START_MIN;
 const SNAP_MIN = 15;
 
@@ -127,6 +127,97 @@ function pxToStartMinutes(offsetX, trackWidth, durationMin) {
 }
 
 /* =========================================================
+   POINTER DRAG (tray chips + placed item blocks)
+   ========================================================= */
+let dayTracks = []; // populated by renderWeekGrid(): [{ dayIdx, el }]
+
+function findTrackAtPoint(clientX, clientY) {
+  for (const { dayIdx, el } of dayTracks) {
+    const rect = el.getBoundingClientRect();
+    if (clientY >= rect.top && clientY <= rect.bottom) {
+      return { dayIdx, el, rect };
+    }
+  }
+  // fall back to nearest track horizontally if pointer is between/outside rows but over the grid
+  if (clientX && dayTracks.length) {
+    const first = dayTracks[0].el.getBoundingClientRect();
+    if (clientX >= first.left && clientX <= first.right) {
+      let closest = dayTracks[0];
+      let closestDist = Infinity;
+      for (const t of dayTracks) {
+        const r = t.el.getBoundingClientRect();
+        const mid = (r.top + r.bottom) / 2;
+        const dist = Math.abs(clientY - mid);
+        if (dist < closestDist) { closestDist = dist; closest = t; }
+      }
+      const rect = closest.el.getBoundingClientRect();
+      return { dayIdx: closest.dayIdx, el: closest.el, rect };
+    }
+  }
+  return null;
+}
+
+function clearTrackHighlights() {
+  dayTracks.forEach(t => t.el.classList.remove("dragover"));
+}
+
+/**
+ * Shared pointer-based drag for both tray chips and placed item blocks.
+ * onPreview(dayIdx|null, startMinutes|null) fires live on every move.
+ * onCommit(dayIdx|null, startMinutes|null) fires once on release.
+ */
+function startPointerDrag(handleEl, item, { onPreview, onCommit, onCancel }) {
+  handleEl.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("[data-complete], [data-del-item]")) return;
+    e.preventDefault();
+    handleEl.setPointerCapture(e.pointerId);
+    handleEl.classList.add("dragging");
+
+    let lastResult = null; // { dayIdx, startMinutes } or null
+
+    const onMove = (moveEvt) => {
+      const hit = findTrackAtPoint(moveEvt.clientX, moveEvt.clientY);
+      clearTrackHighlights();
+      if (hit) {
+        hit.el.classList.add("dragover");
+        const offsetX = moveEvt.clientX - hit.rect.left;
+        const startMinutes = pxToStartMinutes(offsetX, hit.rect.width, item.duration);
+        lastResult = { dayIdx: hit.dayIdx, startMinutes };
+      } else {
+        lastResult = null;
+      }
+      onPreview(lastResult, moveEvt);
+    };
+
+    const onUp = () => {
+      handleEl.removeEventListener("pointermove", onMove);
+      handleEl.removeEventListener("pointerup", onUp);
+      handleEl.removeEventListener("pointercancel", onCancelUp);
+      handleEl.classList.remove("dragging");
+      clearTrackHighlights();
+      if (lastResult) {
+        onCommit(lastResult);
+      } else if (onCancel) {
+        onCancel();
+      }
+    };
+
+    const onCancelUp = () => {
+      handleEl.removeEventListener("pointermove", onMove);
+      handleEl.removeEventListener("pointerup", onUp);
+      handleEl.removeEventListener("pointercancel", onCancelUp);
+      handleEl.classList.remove("dragging");
+      clearTrackHighlights();
+      if (onCancel) onCancel();
+    };
+
+    handleEl.addEventListener("pointermove", onMove);
+    handleEl.addEventListener("pointerup", onUp);
+    handleEl.addEventListener("pointercancel", onCancelUp);
+  });
+}
+
+/* =========================================================
    RENDER: UNSCHEDULED TRAY
    ========================================================= */
 function renderTray() {
@@ -145,19 +236,46 @@ function renderTray() {
   unplaced.forEach(item => {
     const chip = document.createElement("div");
     chip.className = "tray-chip";
-    chip.draggable = true;
     chip.dataset.itemId = item.id;
     chip.innerHTML = `
       <span>${item.title}</span>
       <span class="chip-duration">${item.duration}m</span>
       <button class="del" data-del-item="${item.id}" aria-label="Delete item">✕</button>
     `;
-    chip.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", item.id);
-      chip.classList.add("dragging");
-    });
-    chip.addEventListener("dragend", () => chip.classList.remove("dragging"));
     tray.appendChild(chip);
+
+    let ghost = null;
+    startPointerDrag(chip, item, {
+      onPreview: (result, evt) => {
+        if (!ghost) {
+          ghost = chip.cloneNode(true);
+          ghost.classList.add("tray-chip-ghost");
+          ghost.querySelector("[data-del-item]")?.remove();
+          document.body.appendChild(ghost);
+        }
+        ghost.style.left = `${evt.clientX}px`;
+        ghost.style.top = `${evt.clientY}px`;
+        const timeSpan = ghost.querySelector(".chip-duration");
+        if (result) {
+          const end = result.startMinutes + item.duration;
+          timeSpan.textContent = `${minutesToLabel(result.startMinutes)}–${minutesToLabel(end)}`;
+        } else {
+          timeSpan.textContent = `${item.duration}m`;
+        }
+      },
+      onCommit: (result) => {
+        ghost?.remove();
+        ghost = null;
+        updateDoc(doc(db, "scheduleItems", item.id), {
+          day: result.dayIdx,
+          startMinutes: result.startMinutes
+        });
+      },
+      onCancel: () => {
+        ghost?.remove();
+        ghost = null;
+      }
+    });
   });
 
   tray.querySelectorAll("[data-del-item]").forEach(btn => {
@@ -174,8 +292,9 @@ function renderTray() {
 function renderWeekGrid() {
   const grid = document.getElementById("weekGrid");
   grid.innerHTML = "";
+  dayTracks = [];
 
-  const todayIdx = (new Date().getDay() + 6) % 7; // Mon=0 ... Sun=6
+  const todayIdx = (new Date().getDay() + 1) % 7; // Sat=0 ... Fri=6
 
   DAY_NAMES.forEach((dayName, dayIdx) => {
     const row = document.createElement("div");
@@ -188,20 +307,7 @@ function renderWeekGrid() {
     const track = document.createElement("div");
     track.className = "day-track";
     track.dataset.day = dayIdx;
-
-    track.addEventListener("dragover", (e) => { e.preventDefault(); track.classList.add("dragover"); });
-    track.addEventListener("dragleave", () => track.classList.remove("dragover"));
-    track.addEventListener("drop", (e) => {
-      e.preventDefault();
-      track.classList.remove("dragover");
-      const itemId = e.dataTransfer.getData("text/plain");
-      const item = scheduleItems.find(i => i.id === itemId);
-      if (!item) return;
-      const rect = track.getBoundingClientRect();
-      const offsetX = e.clientX - rect.left;
-      const startMinutes = pxToStartMinutes(offsetX, rect.width, item.duration);
-      updateDoc(doc(db, "scheduleItems", itemId), { day: dayIdx, startMinutes });
-    });
+    dayTracks.push({ dayIdx, el: track });
 
     scheduleItems
       .filter(item => item.day === dayIdx)
@@ -218,29 +324,32 @@ function renderWeekGrid() {
 function renderItemBlock(item) {
   const block = document.createElement("div");
   block.className = "item-block" + (item.completed ? " completed" : "");
-  block.draggable = true;
   block.dataset.itemId = item.id;
 
-  const leftPct = ((item.startMinutes - STRIP_START_MIN) / STRIP_RANGE_MIN) * 100;
-  const widthPct = (item.duration / STRIP_RANGE_MIN) * 100;
-  block.style.left = `${leftPct}%`;
-  block.style.width = `${widthPct}%`;
+  const setPosition = (startMinutes, durationMin) => {
+    const leftPct = ((startMinutes - STRIP_START_MIN) / STRIP_RANGE_MIN) * 100;
+    const widthPct = (durationMin / STRIP_RANGE_MIN) * 100;
+    block.style.left = `${leftPct}%`;
+    block.style.width = `${widthPct}%`;
+  };
+  setPosition(item.startMinutes, item.duration);
 
-  const endMinutes = item.startMinutes + item.duration;
+  const timeEl = document.createElement("span");
+  timeEl.className = "item-time";
+  const setTimeLabel = (startMinutes) => {
+    const endMinutes = startMinutes + item.duration;
+    timeEl.textContent = `${minutesToLabel(startMinutes)}–${minutesToLabel(endMinutes)}`;
+  };
+  setTimeLabel(item.startMinutes);
+
   block.innerHTML = `
     <div class="item-controls">
       <input type="checkbox" ${item.completed ? "checked" : ""} data-complete="${item.id}" />
       <button class="del" data-del-item="${item.id}" aria-label="Delete item">✕</button>
     </div>
     <span class="item-title">${item.title}</span>
-    <span class="item-time">${minutesToLabel(item.startMinutes)}–${minutesToLabel(endMinutes)}</span>
   `;
-
-  block.addEventListener("dragstart", (e) => {
-    e.dataTransfer.setData("text/plain", item.id);
-    block.classList.add("dragging");
-  });
-  block.addEventListener("dragend", () => block.classList.remove("dragging"));
+  block.appendChild(timeEl);
 
   block.querySelector("[data-complete]").onchange = (e) => {
     updateDoc(doc(db, "scheduleItems", item.id), { completed: e.target.checked });
@@ -249,6 +358,37 @@ function renderItemBlock(item) {
     e.stopPropagation();
     deleteDoc(doc(db, "scheduleItems", item.id));
   };
+
+  const originalDay = item.day;
+  const originalStart = item.startMinutes;
+
+  startPointerDrag(block, item, {
+    onPreview: (result) => {
+      if (result) {
+        const targetTrack = dayTracks.find(t => t.dayIdx === result.dayIdx)?.el;
+        if (targetTrack && block.parentElement !== targetTrack) {
+          targetTrack.appendChild(block);
+        }
+        setPosition(result.startMinutes, item.duration);
+        setTimeLabel(result.startMinutes);
+      }
+    },
+    onCommit: (result) => {
+      if (result.dayIdx === originalDay && result.startMinutes === originalStart) return;
+      updateDoc(doc(db, "scheduleItems", item.id), {
+        day: result.dayIdx,
+        startMinutes: result.startMinutes
+      });
+    },
+    onCancel: () => {
+      const originalTrack = dayTracks.find(t => t.dayIdx === originalDay)?.el;
+      if (originalTrack && block.parentElement !== originalTrack) {
+        originalTrack.appendChild(block);
+      }
+      setPosition(originalStart, item.duration);
+      setTimeLabel(originalStart);
+    }
+  });
 
   return block;
 }
