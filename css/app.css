@@ -224,6 +224,7 @@ input[type=color]{padding:2px; height:42px; border-radius:10px;}
 .print-title{display:none;}
 
 @media print{
+  @page{margin:14mm 12mm;}
   body{background:#fff; color:#1B2340;}
   .back-link, header, .tray-shelf, .overlay{display:none !important;}
   #app{display:block !important;}
@@ -235,14 +236,19 @@ input[type=color]{padding:2px; height:42px; border-radius:10px;}
   .week-grid{
     background:#fff; border:1px solid #E7E1D2; box-shadow:none; border-radius:0;
   }
-  .week-row{border-top:1px solid #E7E1D2; min-height:64px;}
+  .week-row{border-top:1px solid #E7E1D2; min-height:96px;}
   .week-row.today{background:none;}
   .day-label{color:#1B2340;}
   .item-block{
-    box-shadow:none !important; color:#fff;
+    box-shadow:none !important; color:#fff; padding:8px 10px 6px; gap:3px;
+    justify-content:flex-start; overflow:visible; top:6px; bottom:6px;
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
-  .item-block .item-time, .item-block .item-note{color:rgba(255,255,255,.85);}
+  .item-block .item-title{font-size:12.5px; overflow:visible; white-space:normal; line-height:1.25;}
+  .item-block .item-note{
+    white-space:normal; overflow:visible; text-overflow:clip; line-height:1.3; font-size:10.5px;
+  }
+  .item-block .item-time{font-size:10.5px;}
   .item-block .item-controls{display:none;}
   .tick-labels{color:#8A90A2;}
 }
