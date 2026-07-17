@@ -1,51 +1,54 @@
-# DailyFlow — Simple Version (HTML + Firebase only)
+# DailyFlow
 
-No Next.js, no npm, no build step. One HTML file. Open it in a browser and it works.
+A calm, focused daily planner. Drag your favorite activities onto a live timeline, track
+completion, and sync everywhere — free, no build step, no framework.
+
+## Brand
+
+| Role | Color |
+|---|---|
+| Deep Navy (primary) | `#1D2B63` |
+| Royal Blue (secondary) | `#465E95` |
+| Warm Gold (accent) | `#D9B362` |
+| Ivory background | `#F7F3EA` |
+| White background | `#FFFFFF` |
+
+Design tokens live in [`css/tokens.css`](css/tokens.css) as CSS custom properties — change a
+value there and it updates across the whole site.
 
 ## Files
 
-- `index.html` — the entire app (HTML + CSS + JS in one file)
-- `firestore.rules` — security rules so each user only sees their own data
+```
+index.html            Marketing landing page
+app.html               The planner app (auth + timeline)
+css/tokens.css          Design tokens (colors, gradients, spacing, type scale)
+css/landing.css         Landing page styles
+css/app.css             App styles
+js/firebase-config.js   Firebase init (shared)
+js/app.js                App logic (auth, Firestore listeners, rendering, drag-drop, modals)
+firestore.rules          Security rules — each user only sees their own data
+firestore.indexes.json   Firestore composite indexes (currently none needed)
+firebase.json             Firebase CLI project config
+.firebaserc                Points the Firebase CLI at project `dailyflow-33fb8`
+```
 
-## 1. Create the Firebase project
+## 1. Firebase project
 
-1. Go to https://console.firebase.google.com → **Add project** → name it `dailyflow`.
-2. **Build → Authentication → Get started**
-   - Enable **Email/Password**
-   - Enable **Google**
+This repo is already wired up to a Firebase project (`dailyflow-33fb8`) — the config in
+[`js/firebase-config.js`](js/firebase-config.js) is filled in and ready to use. It's safe to keep
+public: Firestore access is enforced by `firestore.rules`, not by hiding the config.
+
+To point this at your **own** Firebase project instead:
+
+1. Go to https://console.firebase.google.com → **Add project**.
+2. **Build → Authentication → Get started** → enable **Email/Password** and **Google**.
 3. **Build → Firestore Database → Create database** → start in **production mode**.
-4. Click the **`</>`** (web app) icon on the project overview page → register app.
-5. Copy the config object Firebase gives you. It looks like:
+4. Click the **`</>`** (web app) icon on the project overview page → register app → copy the
+   config object.
+5. Paste it into the `firebaseConfig` object in `js/firebase-config.js`.
+6. Update `.firebaserc` with your project ID.
 
-```js
-const firebaseConfig = {
-  apiKey: "AIza...",
-  authDomain: "dailyflow-xxxx.firebaseapp.com",
-  projectId: "dailyflow-xxxx",
-  storageBucket: "dailyflow-xxxx.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:abcdef"
-};
-```
-
-## 2. Paste your config into `index.html`
-
-Open `index.html`, find this block near the top of the `<script type="module">` section:
-
-```js
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-```
-
-Replace it with the values from step 1. That's it — this is safe to make public; Firebase security comes from the rules file, not from hiding this config.
-
-## 3. Deploy the security rules
+## 2. Deploy the security rules
 
 Install the Firebase CLI once:
 
@@ -57,54 +60,54 @@ firebase login
 From this folder:
 
 ```bash
-firebase init firestore
-# choose "Use an existing project" → select dailyflow
-# when asked for rules file, point it at firestore.rules (or overwrite the generated one)
-
 firebase deploy --only firestore:rules
 ```
 
-## 4. Authorize your domain for login
+## 3. Run locally
 
-If you're just opening `index.html` locally by double-clicking it, Google Sign-In may not work due to browser `file://` restrictions — use a simple local server instead:
+Google Sign-In requires `http://` or `https://`, not `file://`. Use any static server:
 
 ```bash
 npx serve .
-# or: python3 -m http.server 8000
+# or: python -m http.server 8000
 ```
 
-Then visit `http://localhost:8000`.
+Then visit `http://localhost:8000` (landing page) or `http://localhost:8000/app.html` directly.
 
-Once you deploy somewhere real (see below), go to:
-**Firebase Console → Authentication → Settings → Authorized domains** → add your domain (e.g. `yourname.github.io`).
+## 4. Deploy — GitHub Pages (free)
 
-## 5. Deploy — pick any ONE of these (all free)
-
-### Option A: GitHub Pages (easiest)
-1. Push this folder to a GitHub repo.
+1. Push this repo to GitHub.
 2. Repo → **Settings → Pages → Source: Deploy from a branch** → branch `main`, folder `/ (root)`.
 3. Your site goes live at `https://<username>.github.io/<repo>/`.
-4. Add that domain to Firebase's Authorized domains (step 4 above).
+4. **Firebase Console → Authentication → Settings → Authorized domains** → add
+   `<username>.github.io` so Google Sign-In works there.
 
-### Option B: Firebase Hosting (integrates natively, one command)
+### Alternative: Firebase Hosting
+
 ```bash
 firebase init hosting
-# public directory: .  (current folder)
+# public directory: .
 # single-page app: No
 firebase deploy --only hosting
 ```
-Firebase gives you a URL like `https://dailyflow-xxxx.web.app` — no extra domain authorization needed since it's already a Firebase domain.
+
+Firebase gives you a URL like `https://dailyflow-33fb8.web.app` — already an authorized domain,
+no extra setup needed.
 
 ## What the app does
 
-- Email/password + Google sign-in
-- Add **Favorites** (reusable activities with icon/color/duration) in the left sidebar
-- Drag a favorite onto the timeline to schedule it for that hour
-- Or use the **+** floating button to quick-add an activity with a custom time range
-- Check off activities as complete, or delete them
-- Dark mode toggle (saved in the browser)
-- Everything syncs live to Firestore — only the signed-in user's own data is ever visible, enforced by `firestore.rules`
+- Landing page (`index.html`) introduces the product; every CTA links to `app.html`.
+- Email/password + Google sign-in.
+- Add **Favorites** (reusable activities with icon/color/duration) in the left sidebar.
+- Drag a favorite onto the timeline to schedule it for that hour.
+- Or use the **+** floating button to quick-add an activity with a custom time range.
+- Check off activities as complete, or delete them.
+- Dark mode toggle (saved in the browser).
+- Everything syncs live to Firestore — only the signed-in user's own data is ever visible,
+  enforced by `firestore.rules`.
 
 ## Extending it later
 
-Everything lives in `scheduleItems` (one Firestore collection, filtered by `date`), so adding week/month views later just means changing the `date` filter in the `startListeners()` function — no restructuring needed.
+Everything lives in the `scheduleItems` Firestore collection, filtered by `date`, so adding
+week/month views later just means changing the date filter in `startListeners()` inside
+`js/app.js` — no restructuring needed.

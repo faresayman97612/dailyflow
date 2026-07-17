@@ -1,0 +1,74 @@
+/* ==========================================================================
+   DailyFlow Design Tokens
+   Brand system: Deep Navy / Royal Blue / Warm Gold on Ivory & White
+   ========================================================================== */
+:root {
+  /* Brand */
+  --navy: #1D2B63;
+  --navy-dark: #141d47;
+  --royal-blue: #465E95;
+  --royal-blue-light: #5b74ad;
+  --gold: #D9B362;
+  --gold-light: #e8ca8c;
+  --gold-dark: #b8944a;
+
+  /* Backgrounds */
+  --bg-ivory: #F7F3EA;
+  --bg-white: #FFFFFF;
+  --bg-navy: var(--navy);
+
+  /* Text */
+  --text-primary: #1B2340;
+  --text-secondary: #5D6478;
+  --text-muted: #8A90A2;
+  --text-on-dark: #F7F3EA;
+  --text-on-dark-muted: #b7bdd6;
+
+  /* Borders */
+  --border-light: #E7E1D2;
+  --border-on-dark: rgba(247, 243, 234, 0.14);
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #1D2B63 0%, #465E95 100%);
+  --gradient-premium: linear-gradient(135deg, #1D2B63 0%, #465E95 55%, #D9B362 100%);
+  --gradient-gold: linear-gradient(135deg, #D9B362 0%, #e8ca8c 100%);
+  --glow-gold: 0 0 40px rgba(217, 179, 98, 0.35);
+  --glow-navy: 0 0 60px rgba(29, 43, 99, 0.25);
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-full: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(27, 35, 64, 0.06);
+  --shadow-md: 0 8px 24px rgba(27, 35, 64, 0.10);
+  --shadow-lg: 0 20px 60px rgba(27, 35, 64, 0.16);
+  --shadow-gold: 0 10px 30px rgba(217, 179, 98, 0.35);
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* Type scale */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --fs-hero: clamp(2.4rem, 5vw, 3.6rem);
+  --fs-h1: clamp(2rem, 3.4vw, 2.6rem);
+  --fs-h2: clamp(1.5rem, 2.4vw, 1.9rem);
+  --fs-h3: 1.2rem;
+  --fs-body-lg: 1.125rem;
+  --fs-body: 1rem;
+  --fs-sm: 0.875rem;
+  --fs-xs: 0.75rem;
+
+  --container: 1160px;
+  --transition: 180ms ease;
+}

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DailyFlow — Plan your day</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%231D2B63%22/><circle cx=%2216%22 cy=%2216%22 r=%226%22 fill=%22%23D9B362%22/></svg>">
+<link rel="stylesheet" href="css/tokens.css" />
+<link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+
+<a class="back-link" href="index.html">← DailyFlow</a>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="brand"><span class="dot"></span><span>DailyFlow</span></div>
+    <h1>Welcome back</h1>
+    <p id="loginSubtitle">Sign in to plan your day</p>
+
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="passwordInput" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+
+    <button class="btn btn-primary" id="submitAuthBtn">Sign In</button>
+    <button class="btn btn-google" id="googleBtn">🔵 Continue with Google</button>
+
+    <div id="authError"></div>
+
+    <div class="switch-mode">
+      <span id="switchText">Don't have an account?</span>
+      <a id="switchLink">Sign up</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <header>
+    <div class="brand"><span class="dot"></span><span>DailyFlow</span></div>
+    <div class="date" id="todayLabel"></div>
+    <div class="actions">
+      <button class="icon-btn" id="darkToggle" aria-label="Toggle dark mode">🌙</button>
+      <button class="icon-btn" id="logoutBtn" aria-label="Sign out">⎋</button>
+    </div>
+  </header>
+
+  <aside>
+    <h3>Favorites</h3>
+    <div class="fav-list" id="favList"></div>
+    <button class="add-fav-btn" id="addFavBtn">+ Add favorite</button>
+  </aside>
+
+  <main>
+    <div class="timeline" id="timeline"></div>
+  </main>
+
+  <button class="fab" id="quickAddBtn" aria-label="Quick add activity">+</button>
+</div>
+
+<!-- Add Favorite Modal -->
+<div class="overlay" id="favModal">
+  <div class="modal">
+    <h2>New Favorite</h2>
+    <div class="field">
+      <label>Title</label>
+      <input id="favTitle" placeholder="Gym" />
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Icon (emoji)</label>
+        <input id="favIcon" placeholder="🏋" maxlength="2" />
+      </div>
+      <div class="field">
+        <label>Color</label>
+        <input type="color" id="favColor" value="#465E95" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Default duration (minutes)</label>
+      <input type="number" id="favDuration" value="30" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="favCancel">Cancel</button>
+      <button class="btn btn-primary" id="favSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Schedule Item Modal -->
+<div class="overlay" id="itemModal">
+  <div class="modal">
+    <h2>Add Activity</h2>
+    <div class="field">
+      <label>Title</label>
+      <input id="itemTitle" placeholder="Deep work session" />
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Start time</label>
+        <input type="time" id="itemStart" value="09:00" />
+      </div>
+      <div class="field">
+        <label>End time</label>
+        <input type="time" id="itemEnd" value="10:00" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <input id="itemNotes" placeholder="Optional" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="itemCancel">Cancel</button>
+      <button class="btn btn-primary" id="itemSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
