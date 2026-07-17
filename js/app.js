@@ -84,7 +84,7 @@ onAuthStateChanged(auth, (user) => {
    STATE + WEEK GRID CONFIG
    ========================================================= */
 const DAY_NAMES = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-const STRIP_START_MIN = 0;        // 12:00 AM
+const STRIP_START_MIN = 8 * 60;   // 08:00 AM
 const STRIP_END_MIN = 24 * 60;    // 12:00 AM next day
 const STRIP_RANGE_MIN = STRIP_END_MIN - STRIP_START_MIN;
 const SNAP_MIN = 15;
@@ -107,7 +107,7 @@ function startListeners() {
    TIME HELPERS
    ========================================================= */
 function minutesToLabel(mins) {
-  const h = Math.floor(mins / 60);
+  const h = Math.floor(mins / 60) % 24;
   const m = mins % 60;
   const period = h < 12 ? "AM" : "PM";
   const h12 = h % 12 === 0 ? 12 : h % 12;
@@ -439,6 +439,11 @@ document.getElementById("itemSave").onclick = async () => {
   document.getElementById("itemDuration").value = 30;
   itemModal.classList.remove("active");
 };
+
+/* =========================================================
+   EXPORT PDF
+   ========================================================= */
+document.getElementById("exportPdfBtn").onclick = () => window.print();
 
 /* =========================================================
    DARK MODE
