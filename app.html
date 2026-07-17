@@ -44,76 +44,35 @@
 <div id="app">
   <header>
     <div class="brand"><span class="dot"></span><span>DailyFlow</span></div>
-    <div class="date" id="todayLabel"></div>
+    <div class="date" id="todayLabel">This Week</div>
     <div class="actions">
       <button class="icon-btn" id="darkToggle" aria-label="Toggle dark mode">🌙</button>
       <button class="icon-btn" id="logoutBtn" aria-label="Sign out">⎋</button>
     </div>
   </header>
 
-  <aside>
-    <h3>Favorites</h3>
-    <div class="fav-list" id="favList"></div>
-    <button class="add-fav-btn" id="addFavBtn">+ Add favorite</button>
-  </aside>
+  <main class="week-main">
+    <section class="tray-shelf">
+      <h3>Unscheduled</h3>
+      <div class="tray" id="tray"></div>
+      <button class="add-item-btn" id="addItemBtn">+ New Item</button>
+    </section>
 
-  <main>
-    <div class="timeline" id="timeline"></div>
+    <div class="week-grid" id="weekGrid"></div>
   </main>
-
-  <button class="fab" id="quickAddBtn" aria-label="Quick add activity">+</button>
 </div>
 
-<!-- Add Favorite Modal -->
-<div class="overlay" id="favModal">
-  <div class="modal">
-    <h2>New Favorite</h2>
-    <div class="field">
-      <label>Title</label>
-      <input id="favTitle" placeholder="Gym" />
-    </div>
-    <div class="row2">
-      <div class="field">
-        <label>Icon (emoji)</label>
-        <input id="favIcon" placeholder="🏋" maxlength="2" />
-      </div>
-      <div class="field">
-        <label>Color</label>
-        <input type="color" id="favColor" value="#465E95" />
-      </div>
-    </div>
-    <div class="field">
-      <label>Default duration (minutes)</label>
-      <input type="number" id="favDuration" value="30" />
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" id="favCancel">Cancel</button>
-      <button class="btn btn-primary" id="favSave">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- Add / Edit Schedule Item Modal -->
+<!-- New Item Modal -->
 <div class="overlay" id="itemModal">
   <div class="modal">
-    <h2>Add Activity</h2>
+    <h2>New Item</h2>
     <div class="field">
-      <label>Title</label>
+      <label>Name</label>
       <input id="itemTitle" placeholder="Deep work session" />
     </div>
-    <div class="row2">
-      <div class="field">
-        <label>Start time</label>
-        <input type="time" id="itemStart" value="09:00" />
-      </div>
-      <div class="field">
-        <label>End time</label>
-        <input type="time" id="itemEnd" value="10:00" />
-      </div>
-    </div>
     <div class="field">
-      <label>Notes</label>
-      <input id="itemNotes" placeholder="Optional" />
+      <label>Duration (minutes)</label>
+      <input type="number" id="itemDuration" value="30" min="5" step="5" />
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" id="itemCancel">Cancel</button>

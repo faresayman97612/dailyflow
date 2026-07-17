@@ -65,7 +65,7 @@ function friendlyAuthError(code) {
 }
 
 let currentUser = null;
-let unsubFavs = null, unsubItems = null;
+let unsubItems = null;
 
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
@@ -76,218 +76,227 @@ onAuthStateChanged(auth, (user) => {
   } else {
     loginScreen.style.display = "flex";
     appEl.classList.remove("active");
-    if (unsubFavs) unsubFavs();
     if (unsubItems) unsubItems();
   }
 });
 
 /* =========================================================
-   STATE + DATE
+   STATE + WEEK GRID CONFIG
    ========================================================= */
-const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-document.getElementById("todayLabel").textContent = new Date().toLocaleDateString(undefined, {
-  weekday: "long", month: "long", day: "numeric"
-});
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const STRIP_START_MIN = 6 * 60;   // 06:00
+const STRIP_END_MIN = 23 * 60;    // 23:00
+const STRIP_RANGE_MIN = STRIP_END_MIN - STRIP_START_MIN;
+const SNAP_MIN = 15;
 
-let favorites = [];
 let scheduleItems = [];
-
-const HOURS = Array.from({ length: 18 }, (_, i) => i + 5); // 05:00 - 22:00
 
 /* =========================================================
    FIRESTORE LISTENERS
    ========================================================= */
 function startListeners() {
-  const favQ = query(collection(db, "favorites"), where("uid", "==", currentUser.uid));
-  unsubFavs = onSnapshot(favQ, (snap) => {
-    favorites = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderFavorites();
-  });
-
-  const itemsQ = query(
-    collection(db, "scheduleItems"),
-    where("uid", "==", currentUser.uid),
-    where("date", "==", todayStr)
-  );
+  const itemsQ = query(collection(db, "scheduleItems"), where("uid", "==", currentUser.uid));
   unsubItems = onSnapshot(itemsQ, (snap) => {
     scheduleItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderTimeline();
+    renderTray();
+    renderWeekGrid();
   });
 }
 
 /* =========================================================
-   RENDER: FAVORITES
+   TIME HELPERS
    ========================================================= */
-function renderFavorites() {
-  const list = document.getElementById("favList");
-  list.innerHTML = "";
+function minutesToLabel(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${h12}${period}` : `${h12}:${String(m).padStart(2, "0")}${period}`;
+}
 
-  if (favorites.length === 0) {
+function clampStartMinutes(mins) {
+  const snapped = Math.round(mins / SNAP_MIN) * SNAP_MIN;
+  return Math.min(Math.max(snapped, STRIP_START_MIN), STRIP_END_MIN - SNAP_MIN);
+}
+
+function pxToStartMinutes(offsetX, trackWidth, durationMin) {
+  const ratio = offsetX / trackWidth;
+  const rawStart = STRIP_START_MIN + ratio * STRIP_RANGE_MIN;
+  const maxStart = STRIP_END_MIN - durationMin;
+  return clampStartMinutes(Math.min(rawStart, maxStart));
+}
+
+/* =========================================================
+   RENDER: UNSCHEDULED TRAY
+   ========================================================= */
+function renderTray() {
+  const tray = document.getElementById("tray");
+  tray.innerHTML = "";
+
+  const unplaced = scheduleItems.filter(item => item.day == null);
+
+  if (unplaced.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-hint";
-    empty.textContent = "No favorites yet — add one below.";
-    list.appendChild(empty);
+    empty.textContent = "No unscheduled items — add one below and drag it onto a day.";
+    tray.appendChild(empty);
   }
 
-  favorites.forEach(fav => {
-    const el = document.createElement("div");
-    el.className = "fav-item";
-    el.draggable = true;
-    el.dataset.favId = fav.id;
-    el.innerHTML = `
-      <span class="fav-dot" style="background:${fav.color}"></span>
-      <span>${fav.icon || "•"} ${fav.title}</span>
-      <button class="del" data-del-fav="${fav.id}" aria-label="Delete favorite">✕</button>
+  unplaced.forEach(item => {
+    const chip = document.createElement("div");
+    chip.className = "tray-chip";
+    chip.draggable = true;
+    chip.dataset.itemId = item.id;
+    chip.innerHTML = `
+      <span>${item.title}</span>
+      <span class="chip-duration">${item.duration}m</span>
+      <button class="del" data-del-item="${item.id}" aria-label="Delete item">✕</button>
     `;
-    el.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", fav.id);
-      el.classList.add("dragging");
+    chip.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", item.id);
+      chip.classList.add("dragging");
     });
-    el.addEventListener("dragend", () => el.classList.remove("dragging"));
-    list.appendChild(el);
+    chip.addEventListener("dragend", () => chip.classList.remove("dragging"));
+    tray.appendChild(chip);
   });
-  list.querySelectorAll("[data-del-fav]").forEach(btn => {
+
+  tray.querySelectorAll("[data-del-item]").forEach(btn => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      deleteDoc(doc(db, "favorites", btn.dataset.delFav));
+      deleteDoc(doc(db, "scheduleItems", btn.dataset.delItem));
     };
   });
 }
 
 /* =========================================================
-   RENDER: TIMELINE
+   RENDER: WEEK GRID
    ========================================================= */
-function timeToMinutes(t) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
+function renderWeekGrid() {
+  const grid = document.getElementById("weekGrid");
+  grid.innerHTML = "";
 
-function renderTimeline() {
-  const timeline = document.getElementById("timeline");
-  timeline.innerHTML = "";
+  const todayIdx = (new Date().getDay() + 6) % 7; // Mon=0 ... Sun=6
 
-  const nowHour = new Date().getHours();
-
-  HOURS.forEach(hour => {
+  DAY_NAMES.forEach((dayName, dayIdx) => {
     const row = document.createElement("div");
-    row.className = "hour-row" + (hour === nowHour ? " current-hour" : "");
+    row.className = "week-row" + (dayIdx === todayIdx ? " today" : "");
 
     const label = document.createElement("div");
-    label.className = "hour-label";
-    label.textContent = `${String(hour).padStart(2, "0")}:00`;
+    label.className = "day-label";
+    label.textContent = dayName;
 
-    const slot = document.createElement("div");
-    slot.className = "hour-slot";
-    slot.dataset.hour = hour;
+    const track = document.createElement("div");
+    track.className = "day-track";
+    track.dataset.day = dayIdx;
 
-    slot.addEventListener("dragover", (e) => { e.preventDefault(); slot.classList.add("dragover"); });
-    slot.addEventListener("dragleave", () => slot.classList.remove("dragover"));
-    slot.addEventListener("drop", (e) => {
+    track.addEventListener("dragover", (e) => { e.preventDefault(); track.classList.add("dragover"); });
+    track.addEventListener("dragleave", () => track.classList.remove("dragover"));
+    track.addEventListener("drop", (e) => {
       e.preventDefault();
-      slot.classList.remove("dragover");
-      const favId = e.dataTransfer.getData("text/plain");
-      const fav = favorites.find(f => f.id === favId);
-      if (!fav) return;
-      const start = `${String(hour).padStart(2, "0")}:00`;
-      const durationMin = fav.defaultDuration || 30;
-      const endMinutes = hour * 60 + durationMin;
-      const end = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
-      addDoc(collection(db, "scheduleItems"), {
-        uid: currentUser.uid,
-        date: todayStr,
-        title: fav.title,
-        icon: fav.icon,
-        color: fav.color,
-        favoriteId: fav.id,
-        startTime: start,
-        endTime: end,
-        completed: false,
-        notes: "",
-        createdAt: serverTimestamp()
-      });
+      track.classList.remove("dragover");
+      const itemId = e.dataTransfer.getData("text/plain");
+      const item = scheduleItems.find(i => i.id === itemId);
+      if (!item) return;
+      const rect = track.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const startMinutes = pxToStartMinutes(offsetX, rect.width, item.duration);
+      updateDoc(doc(db, "scheduleItems", itemId), { day: dayIdx, startMinutes });
     });
 
-    // items that start in this hour
-    const itemsInHour = scheduleItems
-      .filter(item => Math.floor(timeToMinutes(item.startTime) / 60) === hour)
-      .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
-
-    itemsInHour.forEach(item => {
-      const act = document.createElement("div");
-      act.className = "activity" + (item.completed ? " completed" : "");
-      act.style.borderLeftColor = item.color || "var(--gold)";
-      act.innerHTML = `
-        <input type="checkbox" ${item.completed ? "checked" : ""} data-complete="${item.id}" />
-        <span class="time">${item.startTime}–${item.endTime}</span>
-        <span class="title">${item.icon || ""} ${item.title}</span>
-        <button data-del-item="${item.id}" aria-label="Delete activity">✕</button>
-      `;
-      slot.appendChild(act);
-    });
+    scheduleItems
+      .filter(item => item.day === dayIdx)
+      .forEach(item => track.appendChild(renderItemBlock(item)));
 
     row.appendChild(label);
-    row.appendChild(slot);
-    timeline.appendChild(row);
+    row.appendChild(track);
+    grid.appendChild(row);
   });
 
-  timeline.querySelectorAll("[data-complete]").forEach(cb => {
-    cb.onchange = () => {
-      updateDoc(doc(db, "scheduleItems", cb.dataset.complete), { completed: cb.checked });
-    };
+  renderTickLabels();
+}
+
+function renderItemBlock(item) {
+  const block = document.createElement("div");
+  block.className = "item-block" + (item.completed ? " completed" : "");
+  block.draggable = true;
+  block.dataset.itemId = item.id;
+
+  const leftPct = ((item.startMinutes - STRIP_START_MIN) / STRIP_RANGE_MIN) * 100;
+  const widthPct = (item.duration / STRIP_RANGE_MIN) * 100;
+  block.style.left = `${leftPct}%`;
+  block.style.width = `${widthPct}%`;
+
+  const endMinutes = item.startMinutes + item.duration;
+  block.innerHTML = `
+    <div class="item-controls">
+      <input type="checkbox" ${item.completed ? "checked" : ""} data-complete="${item.id}" />
+      <button class="del" data-del-item="${item.id}" aria-label="Delete item">✕</button>
+    </div>
+    <span class="item-title">${item.title}</span>
+    <span class="item-time">${minutesToLabel(item.startMinutes)}–${minutesToLabel(endMinutes)}</span>
+  `;
+
+  block.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", item.id);
+    block.classList.add("dragging");
   });
-  timeline.querySelectorAll("[data-del-item]").forEach(btn => {
-    btn.onclick = () => deleteDoc(doc(db, "scheduleItems", btn.dataset.delItem));
-  });
+  block.addEventListener("dragend", () => block.classList.remove("dragging"));
+
+  block.querySelector("[data-complete]").onchange = (e) => {
+    updateDoc(doc(db, "scheduleItems", item.id), { completed: e.target.checked });
+  };
+  block.querySelector("[data-del-item]").onclick = (e) => {
+    e.stopPropagation();
+    deleteDoc(doc(db, "scheduleItems", item.id));
+  };
+
+  return block;
+}
+
+function renderTickLabels() {
+  const grid = document.getElementById("weekGrid");
+  let footer = document.querySelector(".week-grid-footer");
+  if (footer) footer.remove();
+
+  footer = document.createElement("div");
+  footer.className = "week-grid-footer";
+  const spacer = document.createElement("div");
+  const ticks = document.createElement("div");
+  ticks.className = "tick-labels";
+
+  for (let mins = STRIP_START_MIN; mins <= STRIP_END_MIN; mins += 60) {
+    const tick = document.createElement("span");
+    tick.style.left = `${((mins - STRIP_START_MIN) / STRIP_RANGE_MIN) * 100}%`;
+    tick.textContent = minutesToLabel(mins);
+    ticks.appendChild(tick);
+  }
+
+  footer.appendChild(spacer);
+  footer.appendChild(ticks);
+  grid.after(footer);
 }
 
 /* =========================================================
-   MODALS: ADD FAVORITE
-   ========================================================= */
-const favModal = document.getElementById("favModal");
-document.getElementById("addFavBtn").onclick = () => favModal.classList.add("active");
-document.getElementById("favCancel").onclick = () => favModal.classList.remove("active");
-document.getElementById("favSave").onclick = async () => {
-  const title = document.getElementById("favTitle").value.trim();
-  if (!title) return;
-  await addDoc(collection(db, "favorites"), {
-    uid: currentUser.uid,
-    title,
-    icon: document.getElementById("favIcon").value.trim(),
-    color: document.getElementById("favColor").value,
-    defaultDuration: Number(document.getElementById("favDuration").value) || 30,
-    createdAt: serverTimestamp()
-  });
-  document.getElementById("favTitle").value = "";
-  document.getElementById("favIcon").value = "";
-  document.getElementById("favDuration").value = 30;
-  favModal.classList.remove("active");
-};
-
-/* =========================================================
-   MODALS: QUICK ADD SCHEDULE ITEM
+   MODAL: NEW ITEM
    ========================================================= */
 const itemModal = document.getElementById("itemModal");
-document.getElementById("quickAddBtn").onclick = () => itemModal.classList.add("active");
+document.getElementById("addItemBtn").onclick = () => itemModal.classList.add("active");
 document.getElementById("itemCancel").onclick = () => itemModal.classList.remove("active");
 document.getElementById("itemSave").onclick = async () => {
   const title = document.getElementById("itemTitle").value.trim();
-  const startTime = document.getElementById("itemStart").value;
-  const endTime = document.getElementById("itemEnd").value;
-  if (!title || !startTime || !endTime) return;
+  const duration = Number(document.getElementById("itemDuration").value) || 30;
+  if (!title) return;
   await addDoc(collection(db, "scheduleItems"), {
     uid: currentUser.uid,
-    date: todayStr,
     title,
-    icon: "",
-    color: "#465E95",
-    startTime,
-    endTime,
+    duration,
+    day: null,
+    startMinutes: null,
     completed: false,
-    notes: document.getElementById("itemNotes").value.trim(),
     createdAt: serverTimestamp()
   });
   document.getElementById("itemTitle").value = "";
-  document.getElementById("itemNotes").value = "";
+  document.getElementById("itemDuration").value = 30;
   itemModal.classList.remove("active");
 };
 

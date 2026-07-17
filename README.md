@@ -1,7 +1,8 @@
 # DailyFlow
 
-A calm, focused daily planner. Drag your favorite activities onto a live timeline, track
-completion, and sync everywhere — free, no build step, no framework.
+A calm, focused weekly planner. Add an item with a name and duration, then drag it onto the day
+and time you want — reschedule anytime by dragging it again. Syncs everywhere, free, no build
+step, no framework.
 
 ## Brand
 
@@ -20,12 +21,12 @@ value there and it updates across the whole site.
 
 ```
 index.html            Marketing landing page
-app.html               The planner app (auth + timeline)
+app.html               The planner app (auth + week grid)
 css/tokens.css          Design tokens (colors, gradients, spacing, type scale)
 css/landing.css         Landing page styles
-css/app.css             App styles
+css/app.css             App styles (tray, week grid, item blocks)
 js/firebase-config.js   Firebase init (shared)
-js/app.js                App logic (auth, Firestore listeners, rendering, drag-drop, modals)
+js/app.js                App logic (auth, Firestore listeners, tray/grid rendering, drag-drop)
 firestore.rules          Security rules — each user only sees their own data
 firestore.indexes.json   Firestore composite indexes (currently none needed)
 firebase.json             Firebase CLI project config
@@ -98,16 +99,29 @@ no extra setup needed.
 
 - Landing page (`index.html`) introduces the product; every CTA links to `app.html`.
 - Email/password + Google sign-in.
-- Add **Favorites** (reusable activities with icon/color/duration) in the left sidebar.
-- Drag a favorite onto the timeline to schedule it for that hour.
-- Or use the **+** floating button to quick-add an activity with a custom time range.
-- Check off activities as complete, or delete them.
+- Click **+ New Item**, enter a name and duration (minutes) — it lands in the **Unscheduled**
+  tray at the top.
+- Drag a tray item onto any day row in the week grid; where you drop it horizontally sets its
+  start time (snapped to the nearest 15 minutes).
+- Drag an already-placed item again to reschedule it — to a new time in the same day, or to a
+  different day entirely.
+- Check off items as complete, or delete them.
 - Dark mode toggle (saved in the browser).
 - Everything syncs live to Firestore — only the signed-in user's own data is ever visible,
   enforced by `firestore.rules`.
 
-## Extending it later
+## Data model
 
-Everything lives in the `scheduleItems` Firestore collection, filtered by `date`, so adding
-week/month views later just means changing the date filter in `startListeners()` inside
-`js/app.js` — no restructuring needed.
+Everything lives in one `scheduleItems` Firestore collection:
+
+| Field | Meaning |
+|---|---|
+| `uid` | Owner's Firebase Auth UID |
+| `title` | Item name |
+| `duration` | Length in minutes |
+| `day` | `0`–`6` (Mon–Sun), or `null` while unscheduled in the tray |
+| `startMinutes` | Minutes from the grid's start hour (6:00 AM), or `null` while unscheduled |
+| `completed` | Checkbox state |
+
+The visible time range (currently 6:00 AM–11:00 PM) is set by `STRIP_START_MIN`/`STRIP_END_MIN`
+in `js/app.js` — change those two constants to show a wider or narrower window.
