@@ -130,8 +130,18 @@ function pxToStartMinutes(offsetX, trackWidth, durationMin) {
    POINTER DRAG (tray chips + placed item blocks)
    ========================================================= */
 let dayTracks = []; // populated by renderWeekGrid(): [{ dayIdx, el }]
+const CLICK_THRESHOLD_PX = 4;
 
 function findTrackAtPoint(clientX, clientY) {
+  const trayEl = document.getElementById("tray");
+  if (trayEl) {
+    const trayRect = trayEl.getBoundingClientRect();
+    if (clientX >= trayRect.left && clientX <= trayRect.right &&
+        clientY >= trayRect.top && clientY <= trayRect.bottom) {
+      return { tray: true, el: trayEl, rect: trayRect };
+    }
+  }
+
   for (const { dayIdx, el } of dayTracks) {
     const rect = el.getBoundingClientRect();
     if (clientY >= rect.top && clientY <= rect.bottom) {
@@ -159,26 +169,42 @@ function findTrackAtPoint(clientX, clientY) {
 
 function clearTrackHighlights() {
   dayTracks.forEach(t => t.el.classList.remove("dragover"));
+  document.getElementById("tray")?.classList.remove("dragover");
 }
 
 /**
  * Shared pointer-based drag for both tray chips and placed item blocks.
- * onPreview(dayIdx|null, startMinutes|null) fires live on every move.
- * onCommit(dayIdx|null, startMinutes|null) fires once on release.
+ * onPreview(result, evt) fires live on every move; result is
+ * { dayIdx, startMinutes } | { tray: true } | null.
+ * onCommit(result) fires once on release with a non-null result.
+ * onClick() fires instead of onCommit/onCancel when the pointer barely moved (a tap/click).
  */
-function startPointerDrag(handleEl, item, { onPreview, onCommit, onCancel }) {
+function startPointerDrag(handleEl, item, { onPreview, onCommit, onCancel, onClick }) {
   handleEl.addEventListener("pointerdown", (e) => {
     if (e.target.closest("[data-complete], [data-del-item]")) return;
     e.preventDefault();
     handleEl.setPointerCapture(e.pointerId);
-    handleEl.classList.add("dragging");
 
-    let lastResult = null; // { dayIdx, startMinutes } or null
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
+    let lastResult = null; // { dayIdx, startMinutes } | { tray: true } | null
 
     const onMove = (moveEvt) => {
+      if (!moved) {
+        const dx = Math.abs(moveEvt.clientX - startX);
+        const dy = Math.abs(moveEvt.clientY - startY);
+        if (dx < CLICK_THRESHOLD_PX && dy < CLICK_THRESHOLD_PX) return;
+        moved = true;
+        handleEl.classList.add("dragging");
+      }
+
       const hit = findTrackAtPoint(moveEvt.clientX, moveEvt.clientY);
       clearTrackHighlights();
-      if (hit) {
+      if (hit && hit.tray) {
+        hit.el.classList.add("dragover");
+        lastResult = { tray: true };
+      } else if (hit) {
         hit.el.classList.add("dragover");
         const offsetX = moveEvt.clientX - hit.rect.left;
         const startMinutes = pxToStartMinutes(offsetX, hit.rect.width, item.duration);
@@ -189,27 +215,26 @@ function startPointerDrag(handleEl, item, { onPreview, onCommit, onCancel }) {
       onPreview(lastResult, moveEvt);
     };
 
-    const onUp = () => {
+    const finish = (cancelled) => {
       handleEl.removeEventListener("pointermove", onMove);
       handleEl.removeEventListener("pointerup", onUp);
       handleEl.removeEventListener("pointercancel", onCancelUp);
       handleEl.classList.remove("dragging");
       clearTrackHighlights();
-      if (lastResult) {
+
+      if (!moved) {
+        if (onClick) onClick();
+        return;
+      }
+      if (!cancelled && lastResult) {
         onCommit(lastResult);
       } else if (onCancel) {
         onCancel();
       }
     };
 
-    const onCancelUp = () => {
-      handleEl.removeEventListener("pointermove", onMove);
-      handleEl.removeEventListener("pointerup", onUp);
-      handleEl.removeEventListener("pointercancel", onCancelUp);
-      handleEl.classList.remove("dragging");
-      clearTrackHighlights();
-      if (onCancel) onCancel();
-    };
+    const onUp = () => finish(false);
+    const onCancelUp = () => finish(true);
 
     handleEl.addEventListener("pointermove", onMove);
     handleEl.addEventListener("pointerup", onUp);
@@ -234,9 +259,11 @@ function renderTray() {
   }
 
   unplaced.forEach(item => {
+    const color = item.color || "#465E95";
     const chip = document.createElement("div");
     chip.className = "tray-chip";
     chip.dataset.itemId = item.id;
+    chip.style.borderLeft = `4px solid ${color}`;
     chip.innerHTML = `
       <span>${item.title}</span>
       <span class="chip-duration">${item.duration}m</span>
@@ -256,7 +283,7 @@ function renderTray() {
         ghost.style.left = `${evt.clientX}px`;
         ghost.style.top = `${evt.clientY}px`;
         const timeSpan = ghost.querySelector(".chip-duration");
-        if (result) {
+        if (result && !result.tray) {
           const end = result.startMinutes + item.duration;
           timeSpan.textContent = `${minutesToLabel(result.startMinutes)}–${minutesToLabel(end)}`;
         } else {
@@ -266,6 +293,7 @@ function renderTray() {
       onCommit: (result) => {
         ghost?.remove();
         ghost = null;
+        if (result.tray) return; // dropped back onto the tray it's already in — no-op
         updateDoc(doc(db, "scheduleItems", item.id), {
           day: result.dayIdx,
           startMinutes: result.startMinutes
@@ -274,7 +302,8 @@ function renderTray() {
       onCancel: () => {
         ghost?.remove();
         ghost = null;
-      }
+      },
+      onClick: () => openItemModal(item)
     });
   });
 
@@ -325,6 +354,7 @@ function renderItemBlock(item) {
   const block = document.createElement("div");
   block.className = "item-block" + (item.completed ? " completed" : "");
   block.dataset.itemId = item.id;
+  block.style.borderLeftColor = item.color || "#465E95";
 
   const setPosition = (startMinutes, durationMin) => {
     const leftPct = ((startMinutes - STRIP_START_MIN) / STRIP_RANGE_MIN) * 100;
@@ -364,16 +394,26 @@ function renderItemBlock(item) {
 
   startPointerDrag(block, item, {
     onPreview: (result) => {
-      if (result) {
+      if (result && !result.tray) {
         const targetTrack = dayTracks.find(t => t.dayIdx === result.dayIdx)?.el;
         if (targetTrack && block.parentElement !== targetTrack) {
           targetTrack.appendChild(block);
         }
         setPosition(result.startMinutes, item.duration);
         setTimeLabel(result.startMinutes);
+      } else if (result && result.tray) {
+        block.style.visibility = "hidden";
+      }
+      if (!result) {
+        block.style.visibility = "";
       }
     },
     onCommit: (result) => {
+      block.style.visibility = "";
+      if (result.tray) {
+        updateDoc(doc(db, "scheduleItems", item.id), { day: null, startMinutes: null });
+        return;
+      }
       if (result.dayIdx === originalDay && result.startMinutes === originalStart) return;
       updateDoc(doc(db, "scheduleItems", item.id), {
         day: result.dayIdx,
@@ -381,13 +421,15 @@ function renderItemBlock(item) {
       });
     },
     onCancel: () => {
+      block.style.visibility = "";
       const originalTrack = dayTracks.find(t => t.dayIdx === originalDay)?.el;
       if (originalTrack && block.parentElement !== originalTrack) {
         originalTrack.appendChild(block);
       }
       setPosition(originalStart, item.duration);
       setTimeLabel(originalStart);
-    }
+    },
+    onClick: () => openItemModal(item)
   });
 
   return block;
@@ -417,26 +459,47 @@ function renderTickLabels() {
 }
 
 /* =========================================================
-   MODAL: NEW ITEM
+   MODAL: NEW / EDIT ITEM
    ========================================================= */
 const itemModal = document.getElementById("itemModal");
-document.getElementById("addItemBtn").onclick = () => itemModal.classList.add("active");
+const itemModalTitle = document.getElementById("itemModalTitle");
+const itemTitleInput = document.getElementById("itemTitle");
+const itemDurationInput = document.getElementById("itemDuration");
+const itemColorInput = document.getElementById("itemColor");
+let editingItemId = null;
+
+function openItemModal(item) {
+  editingItemId = item ? item.id : null;
+  itemModalTitle.textContent = item ? "Edit Item" : "New Item";
+  itemTitleInput.value = item ? item.title : "";
+  itemDurationInput.value = item ? item.duration : 30;
+  itemColorInput.value = item ? (item.color || "#465E95") : "#465E95";
+  itemModal.classList.add("active");
+}
+
+document.getElementById("addItemBtn").onclick = () => openItemModal(null);
 document.getElementById("itemCancel").onclick = () => itemModal.classList.remove("active");
 document.getElementById("itemSave").onclick = async () => {
-  const title = document.getElementById("itemTitle").value.trim();
-  const duration = Number(document.getElementById("itemDuration").value) || 30;
+  const title = itemTitleInput.value.trim();
+  const duration = Number(itemDurationInput.value) || 30;
+  const color = itemColorInput.value;
   if (!title) return;
-  await addDoc(collection(db, "scheduleItems"), {
-    uid: currentUser.uid,
-    title,
-    duration,
-    day: null,
-    startMinutes: null,
-    completed: false,
-    createdAt: serverTimestamp()
-  });
-  document.getElementById("itemTitle").value = "";
-  document.getElementById("itemDuration").value = 30;
+
+  if (editingItemId) {
+    await updateDoc(doc(db, "scheduleItems", editingItemId), { title, duration, color });
+  } else {
+    await addDoc(collection(db, "scheduleItems"), {
+      uid: currentUser.uid,
+      title,
+      duration,
+      color,
+      day: null,
+      startMinutes: null,
+      completed: false,
+      createdAt: serverTimestamp()
+    });
+  }
+
   itemModal.classList.remove("active");
 };
 

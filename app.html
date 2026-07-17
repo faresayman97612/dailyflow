@@ -64,17 +64,23 @@
   </main>
 </div>
 
-<!-- New Item Modal -->
+<!-- New / Edit Item Modal -->
 <div class="overlay" id="itemModal">
   <div class="modal">
-    <h2>New Item</h2>
+    <h2 id="itemModalTitle">New Item</h2>
     <div class="field">
       <label>Name</label>
       <input id="itemTitle" placeholder="Deep work session" />
     </div>
-    <div class="field">
-      <label>Duration (minutes)</label>
-      <input type="number" id="itemDuration" value="30" min="5" step="5" />
+    <div class="row2">
+      <div class="field">
+        <label>Duration (minutes)</label>
+        <input type="number" id="itemDuration" value="30" min="5" step="5" />
+      </div>
+      <div class="field">
+        <label>Color</label>
+        <input type="color" id="itemColor" value="#465E95" />
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" id="itemCancel">Cancel</button>
